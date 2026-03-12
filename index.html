@@ -1092,10 +1092,18 @@ ${condSample}
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })
     });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+
     const data = await res.json();
+
+    // APIキー未設定などのエラーをチェック
+    if (data.error) throw new Error(data.error);
+
     const text = data.content?.map(c => c.text || '').join('') || '';
-    
-    // Parse JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -1106,18 +1114,21 @@ ${condSample}
       document.getElementById('dot-ai').className = 'status-dot ok';
       document.getElementById('lbl-ai').textContent = 'AI生成 完了';
     } else {
-      document.getElementById('aiRawResult').textContent = text;
+      document.getElementById('aiRawResult').textContent = text || '（レスポンスが空です）';
       document.getElementById('aiResultCard').style.display = 'block';
     }
   } catch (err) {
-    // Fallback: generate reasonable content based on records
-    const fallback = generateFallback();
-    state.aiResult = fallback;
-    const display = `【長期目標】\n${fallback.long_goal}\n\n【短期目標①】\n${fallback.short_goal1}\n\n【短期目標②】\n${fallback.short_goal2}\n\n【留意事項】\n${fallback.notes.map((n,i) => `${i+1}. ${n}`).join('\n')}\n\n※ APIへの接続ができなかったため、記録データを元にサンプル内容を生成しました。`;
-    document.getElementById('aiRawResult').textContent = display;
+    // エラー内容を画面に表示
+    document.getElementById('aiRawResult').textContent =
+      `エラーが発生しました:\n${err.message}\n\n---フォールバック生成---`;
     document.getElementById('aiResultCard').style.display = 'block';
     document.getElementById('dot-ai').className = 'status-dot warn';
-    document.getElementById('lbl-ai').textContent = 'AI生成（オフライン）';
+    document.getElementById('lbl-ai').textContent = `エラー: ${err.message}`;
+
+    const fallback = generateFallback();
+    state.aiResult = fallback;
+    const display = `\n\n【長期目標】\n${fallback.long_goal}\n\n【短期目標①】\n${fallback.short_goal1}\n\n【短期目標②】\n${fallback.short_goal2}\n\n【留意事項】\n${fallback.notes.map((n,i) => `${i+1}. ${n}`).join('\n')}`;
+    document.getElementById('aiRawResult').textContent += display;
   }
 
   btn.disabled = false;
